@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+  >
+  <meta name="theme-color" content="#09091c">
+
+  <title>AriZ Rhythm</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app">
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">♪</div>
+        <div>
+          <h1>AriZ <span>Rhythm</span></h1>
+          <p>YOUR MUSIC, YOUR RHYTHM</p>
+        </div>
+      </div>
+
+      <button id="soundButton" class="icon-button"
+        aria-label="Aktifkan atau matikan suara">♫</button>
+    </header>
+
+    <main>
+      <section id="menuScreen" class="menu-screen">
+        <div class="hero">
+          <div class="orb orb-one"></div>
+          <div class="orb orb-two"></div>
+
+          <div class="hero-content">
+            <p class="eyebrow">WELCOME TO THE STAGE</p>
+            <h2>Feel the<br><span>Rhythm.</span></h2>
+            <p class="hero-description">
+              Musikmu. Ritmemu. Permainanmu.
+            </p>
+
+            <div class="music-card">
+              <div class="music-art">♫</div>
+
+              <div class="music-info">
+                <strong>Neon Dreams</strong>
+                <span>AriZ Rhythm Demo</span>
+                <span class="difficulty">NORMAL · DEMO CHART</span>
+              </div>
+
+              <div class="music-badge">♪</div>
+            </div>
+
+            <button id="startButton" class="start-button">
+              <span>▶</span> START GAME
+            </button>
+
+            <p class="menu-note">
+              TAP · HOLD · FLICK
+            </p>
+          </div>
+        </div>
+
+        <div class="feature-row">
+          <div class="feature">
+            <span>✦</span>
+            <strong>4 LANES</strong>
+          </div>
+
+          <div class="feature">
+            <span>♫</span>
+            <strong>YOUR MUSIC</strong>
+          </div>
+
+          <div class="feature">
+            <span>⚡</span>
+            <strong>COMBO</strong>
+          </div>
+        </div>
+
+        <p class="version">ARIZ RHYTHM · v0.1.0</p>
+      </section>
+
+      <section id="gameScreen" class="game-screen hidden">
+
+        <div class="game-header">
+          <button id="backButton" class="back-button">←</button>
+
+          <div class="playing-info">
+            <strong>Neon Dreams</strong>
+            <span>ARIZ RHYTHM DEMO</span>
+          </div>
+
+          <div id="statusLabel" class="status-label">READY</div>
+        </div>
+
+        <div class="score-panel">
+          <div>
+            <span class="stat-label">SCORE</span>
+            <strong id="score">000000</strong>
+          </div>
+
+          <div class="combo-stat">
+            <strong id="combo">0</strong>
+            <span class="stat-label">COMBO</span>
+          </div>
+
+          <div class="accuracy-stat">
+            <span class="stat-label">ACCURACY</span>
+            <strong id="accuracy">100.00%</strong>
+          </div>
+        </div>
+
+        <div class="progress-track">
+          <div id="progressBar"></div>
+        </div>
+
+        <div class="stage">
+          <div class="stage-decoration"></div>
+
+          <div class="lane-labels">
+            <span>01</span>
+            <span>02</span>
+            <span>03</span>
+            <span>04</span>
+          </div>
+
+          <div id="highway" class="highway">
+
+            <div class="lane-line"></div>
+            <div class="lane-line"></div>
+            <div class="lane-line"></div>
+
+            <div class="judgment-line"></div>
+            <div id="notesLayer" class="notes-layer"></div>
+
+            <div id="hitEffect" class="hit-effect"></div>
+          </div>
+
+          <div id="judgment" class="judgment">GET READY!</div>
+
+          <div class="lane-buttons">
+            <button class="lane-button lane-0" data-lane="0"
+              aria-label="Lane 1">1</button>
+
+            <button class="lane-button lane-1" data-lane="1"
+              aria-label="Lane 2">2</button>
+
+            <button class="lane-button lane-2" data-lane="2"
+              aria-label="Lane 3">3</button>
+
+            <button class="lane-button lane-3" data-lane="3"
+              aria-label="Lane 4">4</button>
+          </div>
+        </div>
+
+        <div class="control-hints">
+          <span>● TAP</span>
+          <span>━ HOLD</span>
+          <span>↗ FLICK</span>
+        </div>
+
+        <div id="resultPanel" class="result-panel hidden">
+          <p class="eyebrow">LIVE YOUR MUSIC</p>
+          <h2>STAGE CLEAR!</h2>
+
+          <div id="rank" class="rank">C</div>
+
+          <p class="result-label">FINAL SCORE</p>
+          <strong id="finalScore" class="final-score">000000</strong>
+
+          <div class="result-stats">
+            <div><span>PERFECT</span><strong id="perfectCount">0</strong></div>
+            <div><span>GREAT</span><strong id="greatCount">0</strong></div>
+            <div><span>GOOD</span><strong id="goodCount">0</strong></div>
+            <div><span>MISS</span><strong id="missCount">0</strong></div>
+          </div>
+
+          <button id="retryButton" class="start-button">
+            ↻ PLAY AGAIN
+          </button>
+
+          <button id="menuButton" class="secondary-button">
+            BACK TO MENU
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>MADE WITH ♪ BY ARIIZUP</span>
+    </footer>
+
+  </div>
+
+  <script src="game.js"></script>
+</body>
+  </html>
