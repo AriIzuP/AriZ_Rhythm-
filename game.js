@@ -24,19 +24,15 @@
   const statusLabel = $("statusLabel");
 
   const LANES = 4;
-
-  // Jarak waktu antara kemunculan not dan garis penilaian.
   const TRAVEL_TIME = 1.65;
 
-  // Waktu toleransi penilaian, dalam detik.
   const WINDOWS = {
-    perfect: 0.055,
-    great: 0.105,
-    good: 0.165,
-    miss: 0.19
+    perfect: 0.065,
+    great: 0.12,
+    good: 0.19,
+    miss: 0.22
   };
 
-  // Tempo demo. Ini belum tempo lagu original.
   const BPM = 120;
   const BEAT = 60 / BPM;
   const TOTAL_BEATS = 64;
@@ -63,50 +59,61 @@
   let audioContext = null;
   let soundEnabled = true;
   let lastBeat = -1;
-  let endTimeout = null;
 
   let activeHolds = new Map();
+  let pointerStarts = new Map();
 
-  // --------------------------------------------------
-  // AUDIO DEMO
-  // --------------------------------------------------
+  // ---------------------------------------------
+  // AUDIO
+  // ---------------------------------------------
 
   function getAudioContext() {
     if (!audioContext) {
-      const AudioContextClass =
+      const AudioClass =
         window.AudioContext || window.webkitAudioContext;
 
-      if (AudioContextClass) {
-        audioContext = new AudioContextClass();
+      if (AudioClass) {
+        audioContext = new AudioClass();
       }
     }
 
     return audioContext;
   }
 
+  function unlockAudio() {
+    const ctx = getAudioContext();
+
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+
+    return ctx;
+  }
+
   function playTone(frequency, duration, volume, type) {
     if (!soundEnabled) return;
 
     try {
-      const ctx = getAudioContext();
+      const ctx = unlockAudio();
       if (!ctx) return;
-
-      if (ctx.state === "suspended") {
-        ctx.resume();
-      }
 
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
 
       oscillator.type = type || "sine";
+
       oscillator.frequency.setValueAtTime(
         frequency,
         ctx.currentTime
       );
 
-      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.setValueAtTime(
+        Math.max(0.0001, volume),
+        ctx.currentTime
+      );
+
       gain.gain.exponentialRampToValueAtTime(
-        0.001,
+        0.0001,
         ctx.currentTime + duration
       );
 
@@ -116,22 +123,34 @@
       oscillator.start();
       oscillator.stop(ctx.currentTime + duration);
     } catch (error) {
-      // Game tetap bisa dimainkan tanpa suara.
+      console.warn("Audio belum tersedia:", error);
     }
+  }
+
+  function playStartSound() {
+    playTone(523, 0.12, 0.10, "sine");
+
+    setTimeout(() => {
+      if (soundEnabled) {
+        playTone(784, 0.16, 0.10, "sine");
+      }
+    }, 130);
   }
 
   function playHitSound(grade) {
     const frequencies = {
-      PERFECT: 880,
-      GREAT: 660,
-      GOOD: 440,
-      MISS: 180
+      PERFECT: 1046,
+      GREAT: 784,
+      GOOD: 587,
+      MISS: 220
     };
 
+    const frequency = frequencies[grade] || 587;
+
     playTone(
-      frequencies[grade] || 440,
-      0.09,
-      0.045,
+      frequency,
+      grade === "MISS" ? 0.13 : 0.10,
+      0.12,
       "sine"
     );
   }
@@ -143,35 +162,32 @@
     soundButton.style.opacity = soundEnabled ? "1" : "0.5";
 
     if (soundEnabled) {
-      playTone(660, 0.08, 0.04, "sine");
+      unlockAudio();
+      playStartSound();
     }
   });
 
-  // --------------------------------------------------
+  // ---------------------------------------------
   // CHART
-  // --------------------------------------------------
+  // ---------------------------------------------
 
   function buildChart() {
     const chart = [];
 
-    // Pola chart demo yang dibuat secara lokal.
-    // Waktu disimpan dalam detik.
     for (let beat = 2; beat < TOTAL_BEATS; beat++) {
       const time = beat * BEAT;
 
       if (beat % 8 === 7) {
         chart.push({
-          id: "n" + chart.length,
           time,
           lane: beat % LANES,
           type: "flick",
-          direction: beat % 2 === 0 ? 1 : -1,
+          duration: 0,
           judged: false,
           spawned: false
         });
       } else if (beat % 8 === 3) {
         chart.push({
-          id: "n" + chart.length,
           time,
           lane: (beat + 1) % LANES,
           type: "hold",
@@ -181,22 +197,21 @@
         });
       } else {
         chart.push({
-          id: "n" + chart.length,
           time,
           lane: (beat * 3 + Math.floor(beat / 4)) % LANES,
           type: "tap",
+          duration: 0,
           judged: false,
           spawned: false
         });
       }
 
-      // Not tambahan di sela ketukan.
       if (beat > 5 && beat % 4 === 1) {
         chart.push({
-          id: "n" + chart.length,
           time: time + BEAT / 2,
           lane: (beat + 2) % LANES,
           type: "tap",
+          duration: 0,
           judged: false,
           spawned: false
         });
@@ -212,9 +227,9 @@
     return chart;
   }
 
-  // --------------------------------------------------
-  // GAME START / STOP
-  // --------------------------------------------------
+  // ---------------------------------------------
+  // START / STOP
+  // ---------------------------------------------
 
   function startGame() {
     stopGame();
@@ -235,38 +250,26 @@
     };
 
     activeHolds.clear();
+    pointerStarts.clear();
     lastBeat = -1;
 
     notes = buildChart();
     noteElements.clear();
     notesLayer.replaceChildren();
 
-    notes.forEach((note) => {
-      note.judged = false;
-      note.spawned = false;
-    });
-
     updateStats();
 
     judgment.textContent = "GET READY!";
     judgment.style.color = "#45edff";
     statusLabel.textContent = "READY";
+    progressBar.style.width = "0%";
 
-    highway.style.height = "";
-    highway.scrollTop = 0;
-
-    const ctx = getAudioContext();
-
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume();
-    }
+    unlockAudio();
+    playStartSound();
 
     running = true;
 
-    const now = performance.now();
-
-    // Persiapan singkat sebelum chart berjalan.
-    startTime = now + 1800;
+    startTime = performance.now() + 1800;
 
     animationId = requestAnimationFrame(loop);
   }
@@ -279,12 +282,8 @@
       animationId = 0;
     }
 
-    if (endTimeout) {
-      clearTimeout(endTimeout);
-      endTimeout = null;
-    }
-
     activeHolds.clear();
+    pointerStarts.clear();
   }
 
   function returnToMenu() {
@@ -294,9 +293,9 @@
     menuScreen.classList.remove("hidden");
   }
 
-  // --------------------------------------------------
-  // RENDER NOTES
-  // --------------------------------------------------
+  // ---------------------------------------------
+  // NOTE RENDERING
+  // ---------------------------------------------
 
   function spawnNote(note) {
     const element = document.createElement("div");
@@ -304,16 +303,11 @@
     element.className = "note " + note.type;
     element.dataset.id = note.id;
 
-    // Pusat not berada di tengah jalur.
     element.style.left =
       ((note.lane + 0.5) / LANES * 100) + "%";
 
     if (note.type === "flick") {
       element.style.height = "19px";
-    }
-
-    if (note.type === "hold") {
-      element.style.height = "15px";
     }
 
     notesLayer.appendChild(element);
@@ -322,33 +316,37 @@
     note.spawned = true;
   }
 
-  function renderNote(note, now) {
+  function renderNote(note, elapsed) {
     const element = noteElements.get(note.id);
-
     if (!element) return;
 
     const height = highway.clientHeight;
-    const hitY = height - 64;
+    const hitY = height - 42;
 
-    const elapsed = now - note.time;
+    /*
+      FIX:
+      Note mulai di atas layar dan turun menuju garis.
+      Saat elapsed === note.time, posisi note tepat di hitY.
+    */
 
-    // 0 berarti not belum mencapai garis penilaian.
-    const progress = 1 - elapsed / TRAVEL_TIME;
+    const spawnTime = note.time - TRAVEL_TIME;
+    const progress = (elapsed - spawnTime) / TRAVEL_TIME;
 
-    const y = hitY - progress * (hitY + 30);
+    const startY = -24;
+    const y = startY + progress * (hitY - startY);
 
     element.style.top = y + "px";
 
-    // Hilangkan not yang sudah terlalu jauh dari layar.
-    if (y > height + 35) {
+    // Jangan menghapus note sebelum penilaian MISS.
+    if (y > height + 30 && note.judged) {
       element.remove();
       noteElements.delete(note.id);
     }
   }
 
-  // --------------------------------------------------
+  // ---------------------------------------------
   // GAME LOOP
-  // --------------------------------------------------
+  // ---------------------------------------------
 
   function loop(timestamp) {
     if (!running) return;
@@ -363,16 +361,14 @@
 
     statusLabel.textContent = "PLAYING";
 
-    // Ketukan visual untuk membantu pengujian.
     const beatNumber = Math.floor(elapsed / BEAT);
 
     if (beatNumber !== lastBeat && beatNumber >= 0) {
       lastBeat = beatNumber;
-      playTone(110, 0.025, 0.012, "sine");
-    }
 
-    const height = highway.clientHeight;
-    const hitY = height - 64;
+      // Bunyi ketukan demo dibuat lebih terdengar.
+      playTone(110, 0.045, 0.045, "sine");
+    }
 
     for (const note of notes) {
       if (note.judged) continue;
@@ -387,7 +383,6 @@
         renderNote(note, elapsed);
       }
 
-      // Not yang melewati batas penilaian dianggap MISS.
       if (elapsed > note.time + WINDOWS.miss) {
         judgeNote(note, "MISS");
       }
@@ -408,9 +403,9 @@
     animationId = requestAnimationFrame(loop);
   }
 
-  // --------------------------------------------------
+  // ---------------------------------------------
   // JUDGMENT
-  // --------------------------------------------------
+  // ---------------------------------------------
 
   function removeNote(note) {
     const element = noteElements.get(note.id);
@@ -456,10 +451,7 @@
     playHitSound(grade);
 
     hitEffect.classList.remove("flash");
-
-    // Memicu ulang animasi efek.
     void hitEffect.offsetWidth;
-
     hitEffect.classList.add("flash");
 
     updateStats();
@@ -480,9 +472,7 @@
       counts.GREAT * 70 +
       counts.GOOD * 40;
 
-    const accuracy = total > 0
-      ? weighted / total
-      : 100;
+    const accuracy = total > 0 ? weighted / total : 100;
 
     accuracyElement.textContent = accuracy.toFixed(2) + "%";
   }
@@ -503,10 +493,7 @@
     }
 
     if (nearest && nearestDistance <= WINDOWS.miss) {
-      return {
-        note: nearest,
-        distance: nearestDistance
-      };
+      return { note: nearest, distance: nearestDistance };
     }
 
     return null;
@@ -518,13 +505,13 @@
     return "GOOD";
   }
 
-  // --------------------------------------------------
-  // TAP / HOLD / FLICK INPUT
-  // --------------------------------------------------
-
   function currentElapsed() {
     return (performance.now() - startTime) / 1000;
   }
+
+  // ---------------------------------------------
+  // INPUT
+  // ---------------------------------------------
 
   function laneDown(lane, event) {
     if (!running) return;
@@ -534,43 +521,31 @@
     }
 
     const elapsed = currentElapsed();
-
     if (elapsed < 0) return;
 
     const match = findNearestNote(lane, elapsed);
-
     if (!match) return;
 
     const note = match.note;
 
-    // HOLD harus ditekan ketika not mencapai garis.
+    if (note.type === "flick") {
+      // Flick dinilai saat gerakan dilepaskan.
+      return;
+    }
+
     if (note.type === "hold") {
       if (activeHolds.has(lane)) return;
-
-      const grade = gradeByDistance(match.distance);
 
       activeHolds.set(lane, {
         note,
         startElapsed: elapsed,
-        startGrade: grade
+        startGrade: gradeByDistance(match.distance)
       });
 
-      // Nilai HOLD ditentukan ketika penahanan selesai.
       return;
     }
 
-    // TAP dan FLICK.
-    const grade = gradeByDistance(match.distance);
-
-    judgeNote(note, grade);
-
-    if (event && event.pointerId !== undefined) {
-      try {
-        event.currentTarget.setPointerCapture(event.pointerId);
-      } catch (error) {
-        // Pointer capture tidak tersedia di semua browser.
-      }
-    }
+    judgeNote(note, gradeByDistance(match.distance));
   }
 
   function laneUp(lane, event) {
@@ -579,24 +554,16 @@
     }
 
     const hold = activeHolds.get(lane);
-
     if (!hold) return;
 
     activeHolds.delete(lane);
 
     const elapsed = currentElapsed();
+    const expectedEnd = hold.note.time + hold.note.duration;
 
-    const expectedEnd =
-      hold.note.time + hold.note.duration;
+    const heldDuration = elapsed - hold.startElapsed;
+    const requiredDuration = hold.note.duration * 0.7;
 
-    const heldDuration =
-      elapsed - hold.startElapsed;
-
-    const requiredDuration =
-      hold.note.duration * 0.7;
-
-    // Pemain harus menahan tombol sampai hampir
-    // seluruh durasi HOLD selesai.
     if (
       elapsed >= expectedEnd - 0.15 &&
       heldDuration >= requiredDuration
@@ -607,92 +574,60 @@
     }
   }
 
-  function laneFlick(lane, direction, event) {
-    if (!running) return;
+  function laneFlick(lane, moved, event) {
+    if (!running || !moved) return;
 
     if (event && event.cancelable) {
       event.preventDefault();
     }
 
     const elapsed = currentElapsed();
-
     if (elapsed < 0) return;
 
     const match = findNearestNote(lane, elapsed);
-
     if (!match) return;
 
     const note = match.note;
 
-    if (note.type !== "flick") {
-      // Gerakan cepat tidak menggantikan HOLD.
-      if (note.type === "tap") {
-        judgeNote(
-          note,
-          gradeByDistance(match.distance)
-        );
-      }
-
-      return;
+    if (note.type === "flick") {
+      judgeNote(note, gradeByDistance(match.distance));
+    } else if (note.type === "tap") {
+      judgeNote(note, gradeByDistance(match.distance));
     }
-
-    const grade = gradeByDistance(match.distance);
-
-    // Chart demo menggunakan arah flick ke atas.
-    // Gestur horizontal juga diterima untuk kemudahan
-    // pengujian pada layar sentuh.
-    judgeNote(note, grade);
   }
-
-  // --------------------------------------------------
-  // POINTER EVENTS
-  // --------------------------------------------------
-
-  let pointerStart = null;
 
   document.querySelectorAll(".lane-button").forEach((button) => {
     const lane = Number(button.dataset.lane);
 
     button.addEventListener("pointerdown", (event) => {
-      pointerStart = {
+      event.preventDefault();
+
+      pointerStarts.set(event.pointerId, {
         lane,
         x: event.clientX,
-        y: event.clientY,
-        time: performance.now(),
-        pointerId: event.pointerId
-      };
+        y: event.clientY
+      });
 
       button.classList.add("active");
-
       laneDown(lane, event);
     });
 
     button.addEventListener("pointerup", (event) => {
+      event.preventDefault();
       button.classList.remove("active");
 
-      const start = pointerStart;
+      const start = pointerStarts.get(event.pointerId);
 
-      if (
-        start &&
-        start.pointerId === event.pointerId
-      ) {
+      if (start) {
         const dx = event.clientX - start.x;
         const dy = event.clientY - start.y;
+        const moved = Math.sqrt(dx * dx + dy * dy) > 22;
 
-        const moved = Math.sqrt(dx * dx + dy * dy);
-
-        if (moved > 22) {
-          // Gestur bergerak cepat untuk FLICK.
-          // Gerakan ke atas atau horizontal diterima.
-          const direction =
-            Math.abs(dx) > Math.abs(dy)
-              ? Math.sign(dx)
-              : -Math.sign(dy);
-
-          laneFlick(lane, direction, event);
+        if (moved) {
+          laneFlick(lane, true, event);
         }
 
-        pointerStart = null;
+        pointerStarts.delete(event.pointerId);
       }
 
       laneUp(lane, event);
@@ -701,7 +636,7 @@
     button.addEventListener("pointercancel", (event) => {
       button.classList.remove("active");
       laneUp(lane, event);
-      pointerStart = null;
+      pointerStarts.delete(event.pointerId);
     });
 
     button.addEventListener("contextmenu", (event) => {
@@ -709,23 +644,21 @@
     });
   });
 
-  // --------------------------------------------------
-  // RESULT
-  // --------------------------------------------------
+  // ---------------------------------------------
+  // RESULTS
+  // ---------------------------------------------
 
   function finishGame() {
     if (!running) return;
 
     running = false;
+    activeHolds.clear();
 
     if (animationId) {
       cancelAnimationFrame(animationId);
       animationId = 0;
     }
 
-    activeHolds.clear();
-
-    // Catat MISS untuk HOLD yang belum selesai.
     for (const note of notes) {
       if (!note.judged) {
         judgeNote(note, "MISS");
@@ -745,9 +678,7 @@
       counts.GREAT * 70 +
       counts.GOOD * 40;
 
-    const accuracy = total > 0
-      ? weighted / total
-      : 0;
+    const accuracy = total > 0 ? weighted / total : 0;
 
     let rank = "C";
 
@@ -760,8 +691,7 @@
     }
 
     $("rank").textContent = rank;
-    $("finalScore").textContent =
-      String(score).padStart(6, "0");
+    $("finalScore").textContent = String(score).padStart(6, "0");
 
     $("perfectCount").textContent = counts.PERFECT;
     $("greatCount").textContent = counts.GREAT;
@@ -771,18 +701,26 @@
     resultPanel.classList.remove("hidden");
   }
 
-  // --------------------------------------------------
+  // ---------------------------------------------
   // BUTTONS
-  // --------------------------------------------------
+  // ---------------------------------------------
 
   startButton.addEventListener("click", startGame);
   retryButton.addEventListener("click", startGame);
   menuButton.addEventListener("click", returnToMenu);
   backButton.addEventListener("click", returnToMenu);
 
-  // Mencegah halaman bergeser ketika bermain.
-  highway.addEventListener("touchmove", (event) => {
-    event.preventDefault();
-  }, { passive: false });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && running) {
+      // Tidak menghentikan permainan otomatis,
+      // tetapi mencegah suara tertinggal saat kembali.
+      const ctx = getAudioContext();
 
+      if (ctx && ctx.state === "running") {
+        ctx.suspend().catch(() => {});
+      }
+    } else if (!document.hidden && running) {
+      unlockAudio();
+    }
+  });
 })();
